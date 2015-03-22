@@ -1,0 +1,8 @@
+--打印数据库名称
+set hive.cli.print.current.db=true;
+--打印字段名称
+set hive.cli.print.header=true;
+--本地模式执行，可加速小数据集的查询速度
+set hive.exec.mode.local.auto=true;
+--阻止执行笛卡尔积/不允许在分区表上全表扫描/禁止执行有ORDER BY的排序要求但没有LIMIT语句的HiveQL查询 join nonstrict/strict
+set hive.mapred.mode=strict;
