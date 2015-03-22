@@ -1,0 +1,32 @@
+=========== 1.HIVEQL join方式 ========
+1.1 Common Join
+最为普通的join策略，不受数据量的大小影响，也可以叫做reduce side join ,最没效率的一种join 方式
+参数：
+
+1.2 Map Join
+Map Join 的计算步骤分两步，将小表的数据变成hashtable广播到所有的map 端，将大表的数据进行合理的切分，然后在map 阶段的时候用大表的数据一行一行的去探测(probe) 小表的hashtable. 如果join key 相等，就写入HDFS.
+hints: /*+mapjoin(map_table) */
+参数：hive.auto.convert.join=true 判断哪个是小表，哪个是大表
+      hive.mapjoin.smalltable.filesize=25000000 （默认是25M），当小表超过这个大小，hive 会默认转化成common join
+
+1.3 Bucket Map Join
+hive 建表的时候支持hash 分区通过指定clustered by (col_name,xxx ) into number_buckets buckets 关键字.
+当连接的两个表的join key 就是bucket column 的时候，就可以通过hive.optimize.bucketmapjoin= true来控制hive执行bucket map join 了, 需要注意小表的number_buckets 必须是大表的倍数.
+Bucket Map Join 执行计划分两步，第一步先将小表做map 操作变成hashtable 然后广播到所有大表的map端，大表的map端接受了number_buckets 个小表的hashtable并不需要合成一个大的hashtable,直接可以进行map 操作，map 操作会产生number_buckets 个split，每个split 的标记跟小表的hashtable 标记是一样的, 在执行projection 操作的时候，只需要将小表的一个hashtable 放入内存即可，然后将大表的对应的split 拿出来进行判断，所以其内存限制为小表中最大的那个hashtable 的大小.
+参数：hive.optimize.bucketmapjoin= true
+
+1.4 Sort Merge Bucket Map Join
+Bucket Map Join 并没有解决map join 在小表必须完全装载进内存的限制, 如果想要在一个reduce 节点的大表和小表都不用装载进内存，必须使两个表都在join key 上有序才行，可以在建表的时候就指定sorted byjoin key 或者使用index 的方式.
+如果：Bucket columns == Join columns == sort columns时，小表的数据可以每次只读取一部分，然后还是用大表一行一行的去匹配，这样的join 没有限制内存的大小. 并且也可以执行全外连接.
+参数: set hive.optimize.bucketmapjoin = true;
+      set hive.optimize.bucketmapjoin.sortedmerge = true;
+      set hive.input.format=org.apache.hadoop.hive.ql.io.BucketizedHiveInputFormat;
+
+1.5 Skew Join
+hadoop 中默认是使用hive.exec.reducers.bytes.per.reducer = 1000000000,也就是每个节点的reduce 默认是处理1G大小的数据，如果join 操作产生了数据倾斜，那么可以在hive中设定
+set hive.optimize.skewjoin = true;
+set hive.skewjoin.key = skew_key_threshold （default = 100000）
+hive 在运行的时候没有办法判断哪个key 会产生多大的倾斜，所以使用这个参数控制倾斜的阈值，如果超过这个值，新的值会发送给那些还没有达到的reduce, 一般可以设置成(处理的总记录数/reduce个数)的2-4倍.
+
+1.5 Left Semi Join
+hive 中没有in/exist 这样的子句，所以需要将这种类型的子句转成left semi join. left semi join 是只传递表的join key给map 阶段 , 如果key 足够小还是执行map join, 如果不是则还是common join.
