@@ -1,3 +1,4 @@
+#111
 =========== 1.HIVEQL join方式 ========
 1.1 Common Join
 最为普通的join策略，不受数据量的大小影响，也可以叫做reduce side join ,最没效率的一种join 方式
